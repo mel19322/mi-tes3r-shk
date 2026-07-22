@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shaka Player - ClearKey DRM Tester</title>
+    <!-- Cargamos Shaka Player desde su CDN oficial -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/shaka-player/4.7.1/shaka-player.compiled.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #1e1e1e;
+            color: #ffffff;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .container {
+            width: 100%;
+            max-width: 800px;
+            background-color: #2d2d2d;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+        h2 { margin-top: 0; }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #444;
+            border-radius: 4px;
+            background-color: #121212;
+            color: #fff;
+            box-sizing: border-box;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        button:hover { background-color: #0056b3; }
+        .video-container {
+            margin-top: 20px;
+            width: 100%;
+            background-color: #000;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        video {
+            width: 100%;
+            display: block;
+        }
+        .error { color: #ff4d4d; margin-top: 10px; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Tester de DRM ClearKey</h2>
+    
+    <div class="form-group">
+        <label for="videoUrl">URL del Manifiesto (HLS .m3u8 o DASH .mpd)</label>
+        <input type="text" id="videoUrl" placeholder="https://ejemplo.com/master_wv.m3u8">
+    </div>
+
+    <div class="form-group">
+        <label for="drmKeys">Pares de Claves (Formato: keyid:key, keyid:key)</label>
+        <input type="text" id="drmKeys" placeholder="ce4ce2ceace94606:clavehexadecimal, 1a2b3c4d5e:otraclave">
+    </div>
+
+    <button onclick="loadVideo()">Reproducir</button>
+    <div id="errorMessage" class="error"></div>
+
+    <div class="video-container">
+        <video id="video" controls autoplay></video>
+    </div>
+</div>
+
+<script>
+    let player;
+
+    // Inicializar Shaka Player cuando el DOM esté listo
+    document.addEventListener('DOMContentLoaded', () => {
+        shaka.polyfill.installAll();
+        if (shaka.Player.isBrowserSupported()) {
+            initPlayer();
+        } else {
+            document.getElementById('errorMessage').innerText = "Tu navegador no soporta Shaka Player.";
+        }
+    });
+
+    function initPlayer() {
+        const videoElement = document.getElementById('video');
+        player = new shaka.Player(videoElement);
+
+        // Escuchar errores internos del reproductor
+        player.addEventListener('error', onErrorEvent);
+    }
+
+    async function loadVideo() {
+        const url = document.getElementById('videoUrl').value.trim();
+        const keysString = document.getElementById('drmKeys').value.trim();
+        const errorDiv = document.getElementById('errorMessage');
+        
+        errorDiv.innerText = ""; // Limpiar errores previos
+
+        if (!url) {
+            errorDiv.innerText = "Por favor, ingresa una URL válida.";
+            return;
+        }
+
+        // Lógica para parsear la cadena de texto a un objeto { "keyid": "key" }
+        const clearKeysConfig = {};
+        if (keysString) {
+            try {
+                // Separar por comas
+                const pairs = keysString.split(',');
+                for (let pair of pairs) {
+                    // Separar por dos puntos
+                    const [kid, key] = pair.split(':');
+                    if (kid && key) {
+                        clearKeysConfig[kid.trim()] = key.trim();
+                    }
+                }
+            } catch (e) {
+                errorDiv.innerText = "Error al leer las claves. Verifica el formato keyid:key.";
+                return;
+            }
+        }
+
+        // Configurar el DRM en Shaka Player
+        player.configure({
+            drm: {
+                clearKeys: clearKeysConfig
+            }
+        });
+
+        // Intentar cargar la URL
+        try {
+            await player.load(url);
+            console.log('El video se cargó correctamente.');
+        } catch (e) {
+            onError(e);
+        }
+    }
+
+    function onErrorEvent(event) {
+        onError(event.detail);
+    }
+
+    function onError(error) {
+        console.error('Código de error:', error.code, 'Objeto completo:', error);
+        document.getElementById('errorMessage').innerText = "Error al reproducir: Código " + error.code;
+    }
+</script>
+
+</body>
+</html>
