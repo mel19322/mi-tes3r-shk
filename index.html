@@ -67,6 +67,30 @@
             display: block;
         }
         .error { color: #ff4d4d; margin-top: 10px; font-weight: bold; }
+        
+        /* Nuevos estilos para los metadatos */
+        .metadata-container {
+            margin-top: 20px;
+            background-color: #1a1a1a;
+            border: 1px solid #444;
+            border-radius: 4px;
+            padding: 15px;
+            display: none; /* Se oculta hasta que cargue el video */
+        }
+        .metadata-container h3 {
+            margin-top: 0;
+            margin-bottom: 15px;
+            color: #007bff;
+            border-bottom: 1px solid #444;
+            padding-bottom: 5px;
+        }
+        .metadata-item {
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+        .metadata-item strong {
+            color: #bbb;
+        }
     </style>
 </head>
 <body>
@@ -75,7 +99,7 @@
     <h2>Tester de DRM ClearKey</h2>
     
     <div class="form-group">
-        <label for="videoUrl">URL del Manifiesto (HLS .m3u8 o DASH .mpd)</label>
+        <label for="videoUrl">URL del Manifiesto (HLS .m3u8, DASH .mpd o Progressive .mp4)</label>
         <input type="text" id="videoUrl" placeholder="https://ejemplo.com/master_wv.m3u8">
     </div>
 
@@ -90,6 +114,9 @@
     <div class="video-container">
         <video id="video" controls autoplay></video>
     </div>
+
+    <!-- Contenedor donde se mostrarán los metadatos directamente -->
+    <div id="metadataContainer" class="metadata-container"></div>
 </div>
 
 <script>
@@ -117,8 +144,10 @@
         const url = document.getElementById('videoUrl').value.trim();
         const keysString = document.getElementById('drmKeys').value.trim();
         const errorDiv = document.getElementById('errorMessage');
+        const metadataDiv = document.getElementById('metadataContainer');
         
         errorDiv.innerText = ""; // Limpiar errores previos
+        metadataDiv.style.display = "none"; // Ocultar metadatos al cargar uno nuevo
 
         if (!url) {
             errorDiv.innerText = "Por favor, ingresa una URL válida.";
@@ -155,9 +184,81 @@
         try {
             await player.load(url);
             console.log('El video se cargó correctamente.');
+            
+            // Una vez cargado, extraemos y mostramos los metadatos
+            displayMetadata();
         } catch (e) {
             onError(e);
         }
+    }
+
+    function displayMetadata() {
+        const metadataDiv = document.getElementById('metadataContainer');
+        const variantTracks = player.getVariantTracks();
+        const textTracks = player.getTextTracks();
+        
+        let resolutions = new Set();
+        let audios = new Set();
+        let codecs = new Set();
+        let bandwidths = new Set();
+
+        // Recorrer las pistas de video/audio
+        variantTracks.forEach(track => {
+            if (track.width && track.height) {
+                resolutions.add(`${track.width}x${track.height}`);
+            }
+            if (track.language) {
+                audios.add(track.language);
+            }
+            if (track.codecs) {
+                codecs.add(track.codecs);
+            }
+            if (track.bandwidth) {
+                // Convertir a Mbps para mejor legibilidad
+                bandwidths.add((track.bandwidth / 1000000).toFixed(2) + ' Mbps');
+            }
+        });
+
+        // Recorrer las pistas de texto (Subtítulos)
+        let subtitles = new Set();
+        textTracks.forEach(track => {
+            if (track.language) {
+                subtitles.add(track.language);
+            }
+        });
+
+        // Si no detectó idioma pero hay audio, marcamos como "Original/Desconocido"
+        if (audios.size === 0 && variantTracks.some(t => t.audioId !== null)) {
+             audios.add('Original / No especificado');
+        }
+
+        // Construir el HTML para mostrar los metadatos
+        let html = '<h3>Metadatos del Video</h3>';
+        
+        html += '<div class="metadata-item"><strong>Resoluciones:</strong> ' + 
+                (resolutions.size > 0 ? Array.from(resolutions).join(' | ') : 'No disponible') + '</div>';
+                
+        html += '<div class="metadata-item"><strong>Audios (idiomas):</strong> ' + 
+                (audios.size > 0 ? Array.from(audios).join(', ') : 'No disponible') + '</div>';
+                
+        html += '<div class="metadata-item"><strong>Subtítulos (idiomas):</strong> ' + 
+                (subtitles.size > 0 ? Array.from(subtitles).join(', ') : 'Ninguno') + '</div>';
+                
+        html += '<div class="metadata-item"><strong>Codecs:</strong> ' + 
+                (codecs.size > 0 ? Array.from(codecs).join(', ') : 'No disponible') + '</div>';
+                
+        html += '<div class="metadata-item"><strong>Bitrates:</strong> ' + 
+                (bandwidths.size > 0 ? Array.from(bandwidths).join(' | ') : 'No disponible') + '</div>';
+        
+        // Obtener la duración directamente del elemento de video HTML5
+        const video = document.getElementById('video');
+        const duration = video.duration;
+        html += '<div class="metadata-item"><strong>Duración:</strong> ' + 
+                (duration && !isNaN(duration) && duration !== Infinity ? Math.floor(duration) + ' segundos' : 'En vivo / Desconocida') + '</div>';
+
+        // Insertar en el DOM y hacer visible
+        metadataDiv.innerHTML = html;
+        metadataDiv.style.display = 'block';
     }
 
     function onErrorEvent(event) {
