@@ -172,9 +172,11 @@
                 return;
             }
         }
-
-        // Configurar el DRM en Shaka Player
+        // Configurar el DRM en Shaka Player forzando ClearKey
         player.configure({
+            dash: {
+                ignoreDrmInfo: true // Esto obliga a Shaka a ignorar Widevine/PlayReady del XML
+            },
             drm: {
                 clearKeys: clearKeysConfig
             }
